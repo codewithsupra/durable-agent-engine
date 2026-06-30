@@ -1,0 +1,26 @@
+{
+  "name": "durable-agent-engine",
+  "version": "1.0.0",
+  "description": "Fault-tolerant multi-step LLM agent orchestration engine. Postgres-backed durable queue (SELECT ... FOR UPDATE SKIP LOCKED), idempotent step execution, automatic retry with exponential backoff, dead-letter handling, and live WebSocket execution streaming.",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "worker": "node src/worker.js",
+    "dev": "concurrently \"node src/server.js\" \"node src/worker.js\"",
+    "test": "node --test tests/queue.test.js",
+    "migrate": "node src/migrate.js",
+    "chaos": "node tests/chaos.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "pg": "^8.11.5",
+    "ws": "^8.17.0",
+    "dotenv": "^16.4.5",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "license": "MIT"
+}
