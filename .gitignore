@@ -1,3 +1,22 @@
 node_modules/
 .env
 *.log
+
+# InsForge & AI agent skills
+.insforge
+.agent
+.agents
+.augment
+.claude
+.cline
+.github/copilot*
+.kilocode
+.qoder
+.qwen
+.roo
+.trae
+.windsurf
+
+# InsForge CLI scaffolding (unused — this project runs self-contained Postgres)
+.env.local
+AGENTS.md

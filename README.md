@@ -1,5 +1,7 @@
 # Durable Agent Engine
 
+**🔴 Live demo: [durable-agent-engine-b034212e-e938-4496-b3f0-50045a25b6f9.fly.dev](https://durable-agent-engine-b034212e-e938-4496-b3f0-50045a25b6f9.fly.dev)** — submit a run, watch it execute over WebSocket in real time.
+
 A fault-tolerant orchestration engine for multi-step LLM agent workflows — built to survive worker crashes, network failures, and duplicate execution without losing or double-running a single step.
 
 No Redis. No BullMQ. No managed queue service. The durable queue is built directly on Postgres using `SELECT ... FOR UPDATE SKIP LOCKED`, the same primitive production systems at companies like GitHub use for job queues — because reaching for a queue library hides the part that's actually hard: atomicity, lock ownership, and exactly-once semantics under concurrent workers.
@@ -79,7 +81,11 @@ Expected result: the run still reaches `completed`. Killed steps get reclaimed b
 
 ## Tech
 
-Node.js (ESM, no framework magic), Express, `pg`, `ws`. Postgres can be local (docker-compose included) or a managed instance (tested against [InsForge](https://insforge.dev) for zero-ops Postgres + auth + storage in front of this engine).
+Node.js (ESM, no framework magic), Express, `pg`, `ws`. Cross-process events (worker → API server) use Postgres `LISTEN/NOTIFY`, not an in-memory bus, since workers and the API run as separate processes — the WebSocket dashboard subscribes to a single `LISTEN` connection that fans out to all connected clients.
+
+## Deployment
+
+Deployed as a single self-contained container (Node app + Postgres + supervisord) to [InsForge](https://insforge.dev) compute, which provisions and runs it on Fly.io infrastructure under the hood — no separate cloud account needed. See `Dockerfile` and `deploy/` for the supervisord-managed process layout (Postgres, migration, API server, two workers, all in one image for demo purposes).
 
 ## What this demonstrates
 
