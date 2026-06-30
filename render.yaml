@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: durable-agent-engine
+    runtime: docker
+    plan: free
+    healthCheckPath: /healthz
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: PORT
+        value: 4000
+      - key: OPENROUTER_API_KEY
+        sync: false
