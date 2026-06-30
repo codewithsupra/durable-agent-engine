@@ -2,7 +2,11 @@ import { randomUUID } from 'crypto';
 import 'dotenv/config';
 import { claimStep, reapExpiredLocks, completeStep, failStep } from './queue.js';
 import { resolveHandler } from './steps/registry.js';
-import { broadcast } from './pubsub.js';
+
+// Note: step-transition events are published via Postgres LISTEN/NOTIFY
+// (see queue.js + server.js), not in-process broadcast — the worker and
+// API server are separate processes, so an in-memory event bus here
+// would never reach the WebSocket clients connected to the server.
 
 const WORKER_ID = `worker-${process.pid}-${randomUUID().slice(0, 8)}`;
 const POLL_INTERVAL_MS = 500;
@@ -16,17 +20,14 @@ async function pollOnce() {
   const step = await claimStep(WORKER_ID);
   if (!step) return;
 
-  broadcast(step.run_id, { type: 'step_started', stepId: step.id, name: step.name, attempt: step.attempt });
   console.log(`[${WORKER_ID}] running step ${step.name} (attempt ${step.attempt})`);
 
   try {
     const handler = resolveHandler(step.name);
     const output = await handler(step.input);
     await completeStep(step.id, output);
-    broadcast(step.run_id, { type: 'step_succeeded', stepId: step.id, name: step.name, output });
   } catch (err) {
     const outcome = await failStep(step.id, err.message);
-    broadcast(step.run_id, { type: outcome === 'dead_letter' ? 'step_dead_letter' : 'step_retry', stepId: step.id, name: step.name, error: err.message });
     console.error(`[${WORKER_ID}] step ${step.name} failed: ${err.message} -> ${outcome}`);
   }
 }

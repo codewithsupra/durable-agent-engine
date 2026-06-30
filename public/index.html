@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Durable Agent Engine — Live Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root { --bg:#0b0d11; --panel:#12151b; --border:#23272f; --text:#e6e8eb; --dim:#8a8f98;
+    --ready:#5b8def; --running:#e0a93b; --succeeded:#3ecf8e; --failed:#e0533b; --dead:#7a2c20; --pending:#3a3f47; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  header { padding:20px 28px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+  header h1 { font-size:16px; margin:0; font-weight:600; }
+  header span { color:var(--dim); font-size:12px; }
+  main { display:grid; grid-template-columns: 360px 1fr; gap:0; height: calc(100vh - 65px); }
+  .panel { padding:20px 24px; overflow-y:auto; }
+  .panel.left { border-right:1px solid var(--border); }
+  textarea { width:100%; height:220px; background:#0e1015; color:var(--text); border:1px solid var(--border); border-radius:6px; padding:10px; font-family:inherit; font-size:12px; resize:vertical; }
+  button { background:var(--succeeded); color:#06120c; border:none; padding:10px 16px; border-radius:6px; font-weight:600; cursor:pointer; font-family:inherit; margin-top:10px; width:100%; }
+  button:hover { opacity:0.9; }
+  button:disabled { opacity:0.4; cursor:not-allowed; }
+  .label { font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--dim); margin:18px 0 6px; }
+  .run-id { font-size:11px; color:var(--dim); word-break:break-all; }
+  .dag { display:flex; flex-direction:column; gap:10px; padding:24px; }
+  .step { display:flex; align-items:center; gap:14px; background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:14px 18px; transition: all 0.2s; }
+  .dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+  .dot.pending { background:var(--pending); }
+  .dot.ready { background:var(--ready); }
+  .dot.running { background:var(--running); animation:pulse 1s infinite; }
+  .dot.succeeded { background:var(--succeeded); }
+  .dot.failed, .dot.dead_letter { background:var(--failed); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .step .name { font-weight:600; font-size:13px; }
+  .step .meta { color:var(--dim); font-size:11px; margin-left:auto; text-align:right; }
+  .log { font-size:11px; color:var(--dim); padding:24px; border-top:1px solid var(--border); }
+  .log-line { padding:3px 0; border-bottom:1px dotted #1c2027; }
+  .log-line .type { color:var(--ready); }
+  .status-banner { padding:10px 24px; font-size:12px; font-weight:600; border-bottom:1px solid var(--border); }
+  .status-banner.running { color:var(--running); }
+  .status-banner.completed { color:var(--succeeded); }
+  .status-banner.failed { color:var(--failed); }
+  .empty { color:var(--dim); padding:40px; text-align:center; }
+  .badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:10px; background:#1c2027; color:var(--dim); margin-left:8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>⚙ durable-agent-engine <span class="badge">SKIP LOCKED queue · live</span></h1>
+  <span id="conn">○ idle</span>
+</header>
+<main>
+  <div class="panel left">
+    <div class="label">Submit a run (DAG of steps)</div>
+    <textarea id="payload">{
+  "goal": "Research and summarize a topic",
+  "steps": [
+    { "name": "tool_call.fetch_data", "input": { "tool": "fetch_data", "simulateFailure": true, "failureRate": 0.3 } },
+    { "name": "tool_call.transform", "input": { "tool": "transform" }, "dependsOn": ["tool_call.fetch_data"] },
+    { "name": "llm_call.summarize", "input": { "prompt": "Summarize the data" }, "dependsOn": ["tool_call.transform"] },
+    { "name": "tool_call.notify", "input": { "tool": "notify" }, "dependsOn": ["llm_call.summarize"] }
+  ]
+}</textarea>
+    <button id="submit">Submit run →</button>
+    <div class="label">Run ID</div>
+    <div class="run-id" id="runId">—</div>
+  </div>
+  <div style="display:flex; flex-direction:column;">
+    <div id="banner" class="status-banner">No run submitted yet</div>
+    <div class="dag" id="dag"><div class="empty">Submit a run to see the DAG execute live →</div></div>
+    <div class="log" id="log"></div>
+  </div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+let ws = null;
+
+function statusLabel(s) {
+  return { pending:'waiting on deps', ready:'queued', running:'executing', succeeded:'done', failed:'retrying', dead_letter:'dead-lettered' }[s] || s;
+}
+
+function renderDag(steps) {
+  const dag = $('dag');
+  dag.innerHTML = steps.map(s => `
+    <div class="step" data-id="${s.id}">
+      <div class="dot ${s.status}"></div>
+      <div class="name">${s.name}</div>
+      <div class="meta">${statusLabel(s.status)} · attempt ${s.attempt}/${s.max_attempts}</div>
+    </div>
+  `).join('');
+}
+
+function appendLog(msg) {
+  const log = $('log');
+  const line = document.createElement('div');
+  line.className = 'log-line';
+  const t = new Date().toLocaleTimeString();
+  line.innerHTML = `[${t}] <span class="type">${msg.type}</span> ${msg.name || ''} ${msg.error ? '— ' + msg.error : ''}`;
+  log.prepend(line);
+}
+
+async function poll(runId) {
+  const res = await fetch(`/runs/${runId}`);
+  const run = await res.json();
+  renderDag(run.steps);
+  const banner = $('banner');
+  banner.textContent = `Run ${run.status.toUpperCase()} — ${run.goal}`;
+  banner.className = 'status-banner ' + run.status;
+  return run.status;
+}
+
+$('submit').onclick = async () => {
+  $('submit').disabled = true;
+  let body;
+  try { body = JSON.parse($('payload').value); } catch (e) { alert('Invalid JSON: ' + e.message); $('submit').disabled = false; return; }
+
+  const res = await fetch('/runs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const { runId } = await res.json();
+  $('runId').textContent = runId;
+  $('log').innerHTML = '';
+
+  if (ws) ws.close();
+  ws = new WebSocket(`ws://${location.host}/ws/${runId}`);
+  ws.onopen = () => $('conn').textContent = '● connected';
+  ws.onclose = () => $('conn').textContent = '○ idle';
+  ws.onmessage = (ev) => {
+    const msg = JSON.parse(ev.data);
+    if (msg.type !== 'subscribed') appendLog(msg);
+    poll(runId).then(status => {
+      if (status === 'completed' || status === 'failed') $('submit').disabled = false;
+    });
+  };
+
+  poll(runId);
+};
+</script>
+</body>
+</html>

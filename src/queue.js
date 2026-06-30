@@ -34,7 +34,11 @@ export async function claimStep(workerId) {
        RETURNING *`,
       [stepId, workerId, lockExpires]
     );
-    return updated[0];
+    const step = updated[0];
+    await client.query(`SELECT pg_notify('step_events', $1)`, [
+      JSON.stringify({ type: 'step_started', runId: step.run_id, stepId: step.id, name: step.name, attempt: step.attempt }),
+    ]);
+    return step;
   });
 }
 
@@ -76,6 +80,10 @@ export async function completeStep(stepId, output) {
       `INSERT INTO audit_log (run_id, step_id, event, detail) VALUES ($1, $2, 'step_succeeded', $3)`,
       [runId, stepId, output]
     );
+
+    await client.query(`SELECT pg_notify('step_events', $1)`, [
+      JSON.stringify({ type: 'step_succeeded', runId, stepId, output }),
+    ]);
   });
 }
 
@@ -93,6 +101,9 @@ export async function failStep(stepId, error) {
       [step.run_id, stepId, { error: String(error) }]
     );
     await pool.query(`UPDATE runs SET status = 'failed', updated_at = now() WHERE id = $1`, [step.run_id]);
+    await pool.query(`SELECT pg_notify('step_events', $1)`, [
+      JSON.stringify({ type: 'step_dead_letter', runId: step.run_id, stepId, error: String(error) }),
+    ]);
     return 'dead_letter';
   }
 
@@ -107,5 +118,8 @@ export async function failStep(stepId, error) {
     `INSERT INTO audit_log (run_id, step_id, event, detail) VALUES ($1, $2, 'retry_scheduled', $3)`,
     [step.run_id, stepId, { error: String(error), backoffMs, attempt: step.attempt }]
   );
+  await pool.query(`SELECT pg_notify('step_events', $1)`, [
+    JSON.stringify({ type: 'step_retry', runId: step.run_id, stepId, error: String(error), backoffMs }),
+  ]);
   return 'retry_scheduled';
 }

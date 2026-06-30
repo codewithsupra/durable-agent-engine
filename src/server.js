@@ -1,13 +1,16 @@
 import express from 'express';
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
-import { URL } from 'url';
+import { URL, fileURLToPath } from 'url';
+import path from 'path';
 import 'dotenv/config';
 import { createRun, getRunStatus } from './orchestrator.js';
-import { subscribe, unsubscribe } from './pubsub.js';
+import { subscribe, unsubscribe, startListening } from './pubsub.js';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 app.use(express.json());
+app.use(express.static(path.join(__dirname, '..', 'public')));
 
 app.post('/runs', async (req, res) => {
   const { goal, steps } = req.body;
@@ -43,4 +46,7 @@ server.on('upgrade', (req, socket, head) => {
 });
 
 const PORT = process.env.PORT || 4000;
-server.listen(PORT, () => console.log(`durable-agent-engine API listening on :${PORT}`));
+server.listen(PORT, async () => {
+  console.log(`durable-agent-engine API listening on :${PORT}`);
+  await startListening();
+});
