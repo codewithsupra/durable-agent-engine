@@ -18,7 +18,8 @@ app.post('/runs', async (req, res) => {
     return res.status(400).json({ error: 'goal and non-empty steps[] are required' });
   }
   const runId = await createRun(goal, steps);
-  res.status(201).json({ runId, watch: `ws://${req.headers.host}/ws/${runId}` });
+  const wsProtocol = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'wss' : 'ws';
+  res.status(201).json({ runId, watch: `${wsProtocol}://${req.headers.host}/ws/${runId}` });
 });
 
 app.get('/runs/:id', async (req, res) => {

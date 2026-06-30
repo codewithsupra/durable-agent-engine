@@ -2,27 +2,83 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>Durable Agent Engine — Live Dashboard</title>
+<title>Durable Agent Engine — fault-tolerant LLM agent orchestration</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
-  :root { --bg:#0b0d11; --panel:#12151b; --border:#23272f; --text:#e6e8eb; --dim:#8a8f98;
+  :root { --bg:#0b0d11; --panel:#12151b; --panel2:#161a21; --border:#23272f; --text:#e6e8eb; --dim:#8a8f98; --accent:#3ecf8e;
     --ready:#5b8def; --running:#e0a93b; --succeeded:#3ecf8e; --failed:#e0533b; --dead:#7a2c20; --pending:#3a3f47; }
   * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-  header { padding:20px 28px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
-  header h1 { font-size:16px; margin:0; font-weight:600; }
-  header span { color:var(--dim); font-size:12px; }
-  main { display:grid; grid-template-columns: 360px 1fr; gap:0; height: calc(100vh - 65px); }
-  .panel { padding:20px 24px; overflow-y:auto; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  a { color: var(--accent); }
+
+  /* top nav */
+  nav { padding:16px 32px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; position:sticky; top:0; background:var(--bg); z-index:10; }
+  nav .brand { font-weight:700; font-size:15px; font-family: ui-monospace, monospace; }
+  nav .links { display:flex; gap:20px; font-size:13px; }
+  nav .links a { color:var(--dim); text-decoration:none; }
+  nav .links a:hover { color:var(--text); }
+
+  /* hero */
+  .hero { max-width:880px; margin:0 auto; padding:64px 24px 40px; text-align:center; }
+  .hero .eyebrow { font-family: ui-monospace, monospace; font-size:12px; color:var(--accent); letter-spacing:0.08em; text-transform:uppercase; margin-bottom:14px; }
+  .hero h1 { font-size:38px; line-height:1.2; margin:0 0 18px; font-weight:700; }
+  .hero p { color:var(--dim); font-size:17px; line-height:1.6; max-width:640px; margin:0 auto 28px; }
+  .hero .ctas { display:flex; gap:12px; justify-content:center; }
+  .btn { display:inline-block; padding:11px 22px; border-radius:8px; font-weight:600; font-size:14px; text-decoration:none; cursor:pointer; border:1px solid var(--border); }
+  .btn.primary { background:var(--accent); color:#06120c; border:none; }
+  .btn.ghost { color:var(--text); }
+
+  /* sections */
+  section { max-width:1040px; margin:0 auto; padding:48px 24px; }
+  section.alt { background:var(--panel2); max-width:none; }
+  section.alt > div { max-width:1040px; margin:0 auto; padding:0 24px; }
+  .section-title { font-size:13px; text-transform:uppercase; letter-spacing:0.08em; color:var(--accent); font-family: ui-monospace, monospace; margin-bottom:8px; }
+  .section-h { font-size:26px; font-weight:700; margin:0 0 32px; }
+
+  /* problem grid */
+  .problem-grid { display:grid; grid-template-columns: repeat(2, 1fr); gap:16px; }
+  .problem-card { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:18px 20px; }
+  .problem-card .q { font-size:14px; font-weight:600; margin-bottom:6px; }
+  .problem-card .a { font-size:13px; color:var(--dim); line-height:1.5; }
+
+  /* how it works steps */
+  .steps { display:flex; flex-direction:column; gap:0; }
+  .hiw-step { display:grid; grid-template-columns:40px 1fr; gap:18px; padding:20px 0; border-bottom:1px solid var(--border); }
+  .hiw-step:last-child { border-bottom:none; }
+  .hiw-num { width:36px; height:36px; border-radius:50%; background:var(--panel); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-family:ui-monospace,monospace; font-weight:700; color:var(--accent); font-size:14px; }
+  .hiw-step h3 { margin:4px 0 6px; font-size:16px; }
+  .hiw-step p { margin:0; color:var(--dim); font-size:14px; line-height:1.6; }
+  .hiw-step code { background:#1c2027; padding:1px 6px; border-radius:4px; font-size:12.5px; }
+
+  /* guarantees table */
+  table { width:100%; border-collapse:collapse; font-size:13.5px; }
+  th { text-align:left; color:var(--dim); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:0.04em; padding:10px 14px; border-bottom:1px solid var(--border); }
+  td { padding:14px; border-bottom:1px solid var(--border); vertical-align:top; }
+  td:first-child { font-weight:600; white-space:nowrap; }
+  td.mono { color:var(--accent); }
+
+  /* usage */
+  pre { background:#0e1015; border:1px solid var(--border); border-radius:8px; padding:16px 18px; overflow-x:auto; font-size:12.5px; line-height:1.6; }
+
+  /* demo section */
+  .demo-wrap { border-top:2px solid var(--accent); }
+  .demo-header { padding:32px 24px 8px; max-width:1040px; margin:0 auto; }
+  .demo-header h2 { font-size:22px; margin:0 0 6px; }
+  .demo-header p { color:var(--dim); font-size:14px; margin:0; }
+  .panel-header { padding:14px 28px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; font-family: ui-monospace, monospace; }
+  .badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:10px; background:#1c2027; color:var(--dim); margin-left:8px; }
+  main.dash { display:grid; grid-template-columns: 360px 1fr; gap:0; min-height:560px; border-top:1px solid var(--border); }
+  .panel { padding:20px 24px; overflow-y:auto; font-family: ui-monospace, monospace; }
   .panel.left { border-right:1px solid var(--border); }
   textarea { width:100%; height:220px; background:#0e1015; color:var(--text); border:1px solid var(--border); border-radius:6px; padding:10px; font-family:inherit; font-size:12px; resize:vertical; }
-  button { background:var(--succeeded); color:#06120c; border:none; padding:10px 16px; border-radius:6px; font-weight:600; cursor:pointer; font-family:inherit; margin-top:10px; width:100%; }
-  button:hover { opacity:0.9; }
-  button:disabled { opacity:0.4; cursor:not-allowed; }
-  .label { font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--dim); margin:18px 0 6px; }
-  .run-id { font-size:11px; color:var(--dim); word-break:break-all; }
-  .dag { display:flex; flex-direction:column; gap:10px; padding:24px; }
-  .step { display:flex; align-items:center; gap:14px; background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:14px 18px; transition: all 0.2s; }
+  button#submit { background:var(--succeeded); color:#06120c; border:none; padding:10px 16px; border-radius:6px; font-weight:600; cursor:pointer; font-family:inherit; margin-top:10px; width:100%; }
+  button#submit:hover { opacity:0.9; }
+  button#submit:disabled { opacity:0.4; cursor:not-allowed; }
+  .label { font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--dim); margin:18px 0 6px; font-family: ui-monospace, monospace; }
+  .run-id { font-size:11px; color:var(--dim); word-break:break-all; font-family: ui-monospace, monospace; }
+  .dag { display:flex; flex-direction:column; gap:10px; padding:24px; font-family: ui-monospace, monospace; }
+  .step { display:flex; align-items:center; gap:14px; background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:14px 18px; }
   .dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
   .dot.pending { background:var(--pending); }
   .dot.ready { background:var(--ready); }
@@ -32,26 +88,158 @@
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
   .step .name { font-weight:600; font-size:13px; }
   .step .meta { color:var(--dim); font-size:11px; margin-left:auto; text-align:right; }
-  .log { font-size:11px; color:var(--dim); padding:24px; border-top:1px solid var(--border); }
+  .log { font-size:11px; color:var(--dim); padding:24px; border-top:1px solid var(--border); font-family: ui-monospace, monospace; }
   .log-line { padding:3px 0; border-bottom:1px dotted #1c2027; }
   .log-line .type { color:var(--ready); }
-  .status-banner { padding:10px 24px; font-size:12px; font-weight:600; border-bottom:1px solid var(--border); }
+  .status-banner { padding:10px 24px; font-size:12px; font-weight:600; border-bottom:1px solid var(--border); font-family: ui-monospace, monospace; }
   .status-banner.running { color:var(--running); }
   .status-banner.completed { color:var(--succeeded); }
   .status-banner.failed { color:var(--failed); }
-  .empty { color:var(--dim); padding:40px; text-align:center; }
-  .badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:10px; background:#1c2027; color:var(--dim); margin-left:8px; }
+  .empty { color:var(--dim); padding:40px; text-align:center; font-family: ui-monospace, monospace; }
+
+  footer { text-align:center; padding:40px 24px; color:var(--dim); font-size:13px; border-top:1px solid var(--border); }
+  footer a { color:var(--dim); margin:0 10px; }
+
+  @media (max-width: 760px) {
+    .problem-grid { grid-template-columns:1fr; }
+    main.dash { grid-template-columns:1fr; }
+    .hero h1 { font-size:28px; }
+  }
 </style>
 </head>
 <body>
-<header>
-  <h1>⚙ durable-agent-engine <span class="badge">SKIP LOCKED queue · live</span></h1>
-  <span id="conn">○ idle</span>
-</header>
-<main>
-  <div class="panel left">
-    <div class="label">Submit a run (DAG of steps)</div>
-    <textarea id="payload">{
+
+<nav>
+  <div class="brand">⚙ durable-agent-engine</div>
+  <div class="links">
+    <a href="#problem">Why</a>
+    <a href="#how">How it works</a>
+    <a href="#guarantees">Guarantees</a>
+    <a href="#usage">Usage</a>
+    <a href="#demo">Live demo</a>
+    <a href="https://github.com/codewithsupra/durable-agent-engine" target="_blank">GitHub ↗</a>
+  </div>
+</nav>
+
+<div class="hero">
+  <div class="eyebrow">Postgres-native job queue · no Redis · no BullMQ</div>
+  <h1>A fault-tolerant orchestration engine for multi-step LLM agent workflows</h1>
+  <p>Most agent demos show the happy path. This shows what happens when a worker crashes mid-step, two workers race for the same job, or a tool call fails — and proves the run still finishes correctly, exactly once, every time.</p>
+  <div class="ctas">
+    <a class="btn primary" href="#demo">Try the live demo →</a>
+    <a class="btn ghost" href="https://github.com/codewithsupra/durable-agent-engine" target="_blank">View source</a>
+  </div>
+</div>
+
+<section id="problem">
+  <div class="section-title">The problem</div>
+  <h2 class="section-h">What "agent orchestration" demos usually skip</h2>
+  <div class="problem-grid">
+    <div class="problem-card">
+      <div class="q">A worker process dies mid-step</div>
+      <div class="a">Most demos just... don't test this. Here, a lock TTL expires and another worker automatically reclaims the orphaned step — no lost work, no manual intervention.</div>
+    </div>
+    <div class="problem-card">
+      <div class="q">Two workers race for the same job</div>
+      <div class="a">Without atomicity, two workers can both think they own a step and run it twice — silently corrupting state. This engine guarantees exactly one winner per claim.</div>
+    </div>
+    <div class="problem-card">
+      <div class="q">A tool call fails transiently</div>
+      <div class="a">A network blip shouldn't re-run everything before it. Only the failed step retries, with exponential backoff, up to a bounded number of attempts.</div>
+    </div>
+    <div class="problem-card">
+      <div class="q">You need to know what actually happened</div>
+      <div class="a">Every state transition — claim, success, retry, dead-letter — is written to an append-only audit log. Nothing is inferred after the fact.</div>
+    </div>
+  </div>
+</section>
+
+<section class="alt" id="how">
+  <div>
+    <div class="section-title">How it works</div>
+    <h2 class="section-h">From DAG submission to completion</h2>
+    <div class="steps">
+      <div class="hiw-step">
+        <div class="hiw-num">1</div>
+        <div>
+          <h3>You submit a DAG</h3>
+          <p>POST a goal plus a list of steps, each with an optional <code>dependsOn</code>. Steps with no dependencies become <code>ready</code> immediately; everything else waits.</p>
+        </div>
+      </div>
+      <div class="hiw-step">
+        <div class="hiw-num">2</div>
+        <div>
+          <h3>Workers claim steps atomically</h3>
+          <p>Each worker polls Postgres with <code>SELECT ... FOR UPDATE SKIP LOCKED</code> inside a transaction — the same primitive companies like GitHub use for production job queues. Exactly one worker ever wins a given step, with zero blocking between workers.</p>
+        </div>
+      </div>
+      <div class="hiw-step">
+        <div class="hiw-num">3</div>
+        <div>
+          <h3>Steps execute, fail, or get reclaimed</h3>
+          <p>Success promotes dependent steps to <code>ready</code>. Failure schedules a retry with exponential backoff (capped, then dead-lettered). A worker that dies mid-step leaves an expiring lock — a reaper requeues it automatically.</p>
+        </div>
+      </div>
+      <div class="hiw-step">
+        <div class="hiw-num">4</div>
+        <div>
+          <h3>Every transition streams live</h3>
+          <p>Postgres <code>LISTEN/NOTIFY</code> bridges worker processes (separate OS processes) to the API server, which fans events out over WebSocket to anyone watching that run — see it below.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="guarantees">
+  <div class="section-title">Correctness</div>
+  <h2 class="section-h">Guarantees, and how they're enforced</h2>
+  <table>
+    <tr><th>Guarantee</th><th>Mechanism</th></tr>
+    <tr><td>Exactly-one claim per step</td><td class="mono">FOR UPDATE SKIP LOCKED inside a transaction</td></tr>
+    <tr><td>No lost work on worker crash</td><td class="mono">30s lock TTL + reaper requeues orphaned steps</td></tr>
+    <tr><td>No duplicate run creation</td><td class="mono">idempotency key = runId:stepName via ON CONFLICT</td></tr>
+    <tr><td>Bounded retries</td><td class="mono">exponential backoff (1s→60s), dead-letter after max_attempts</td></tr>
+    <tr><td>Full auditability</td><td class="mono">every transition written to audit_log</td></tr>
+    <tr><td>DAG correctness</td><td class="mono">dependents promoted to ready only once all deps succeed</td></tr>
+  </table>
+</section>
+
+<section class="alt" id="usage">
+  <div>
+    <div class="section-title">Usage</div>
+    <h2 class="section-h">Run it yourself</h2>
+    <pre><code>docker compose up -d        # local Postgres
+cp .env.example .env
+npm install
+npm run migrate
+npm start                   # API + WebSocket server
+npm run worker              # run 2-3x to see SKIP LOCKED in action
+
+curl -X POST localhost:4000/runs -H 'Content-Type: application/json' -d '{
+  "goal": "Research and summarize a topic",
+  "steps": [
+    { "name": "tool_call.fetch_data", "input": { "tool": "fetch_data" } },
+    { "name": "llm_call.summarize", "input": { "prompt": "..." }, "dependsOn": ["tool_call.fetch_data"] }
+  ]
+}'</code></pre>
+    <p style="color:var(--dim); font-size:13px; margin-top:14px;">Full chaos test (kill a worker mid-run, watch it self-heal) and architecture notes are in the <a href="https://github.com/codewithsupra/durable-agent-engine" target="_blank">README</a>.</p>
+  </div>
+</section>
+
+<div class="demo-wrap" id="demo">
+  <div class="demo-header">
+    <h2>Live demo</h2>
+    <p>This is the real engine running right now, on this server. Edit the DAG below or submit as-is — you'll see steps go queued → executing → done in real time, including a simulated transient failure and retry.</p>
+  </div>
+  <div class="panel-header">
+    <span>⚙ engine status <span class="badge">SKIP LOCKED queue · live</span></span>
+    <span id="conn">○ idle</span>
+  </div>
+  <main class="dash">
+    <div class="panel left">
+      <div class="label">Submit a run (DAG of steps)</div>
+      <textarea id="payload">{
   "goal": "Research and summarize a topic",
   "steps": [
     { "name": "tool_call.fetch_data", "input": { "tool": "fetch_data", "simulateFailure": true, "failureRate": 0.3 } },
@@ -60,16 +248,24 @@
     { "name": "tool_call.notify", "input": { "tool": "notify" }, "dependsOn": ["llm_call.summarize"] }
   ]
 }</textarea>
-    <button id="submit">Submit run →</button>
-    <div class="label">Run ID</div>
-    <div class="run-id" id="runId">—</div>
-  </div>
-  <div style="display:flex; flex-direction:column;">
-    <div id="banner" class="status-banner">No run submitted yet</div>
-    <div class="dag" id="dag"><div class="empty">Submit a run to see the DAG execute live →</div></div>
-    <div class="log" id="log"></div>
-  </div>
-</main>
+      <button id="submit">Submit run →</button>
+      <div class="label">Run ID</div>
+      <div class="run-id" id="runId">—</div>
+    </div>
+    <div style="display:flex; flex-direction:column;">
+      <div id="banner" class="status-banner">No run submitted yet</div>
+      <div class="dag" id="dag"><div class="empty">Submit a run to see the DAG execute live →</div></div>
+      <div class="log" id="log"></div>
+    </div>
+  </main>
+</div>
+
+<footer>
+  Built by <a href="https://github.com/codewithsupra" target="_blank">codewithsupra</a> ·
+  <a href="https://github.com/codewithsupra/durable-agent-engine" target="_blank">Source</a> ·
+  MIT License
+</footer>
+
 <script>
 const $ = (id) => document.getElementById(id);
 let ws = null;
@@ -119,7 +315,8 @@ $('submit').onclick = async () => {
   $('log').innerHTML = '';
 
   if (ws) ws.close();
-  ws = new WebSocket(`ws://${location.host}/ws/${runId}`);
+  const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${wsProtocol}//${location.host}/ws/${runId}`);
   ws.onopen = () => $('conn').textContent = '● connected';
   ws.onclose = () => $('conn').textContent = '○ idle';
   ws.onmessage = (ev) => {
